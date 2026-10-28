@@ -1,0 +1,33 @@
+function Get-AzDoBuildHealth {
+    param(
+        [Parameter(Mandatory)][string]$Organization,
+        [Parameter(Mandatory)][string]$Project,
+        [Parameter(Mandatory)][int]$DefinitionId,
+        [int]$Top = 30,
+        [string]$Pat = $env:AZDO_PAT
+    )
+
+    $headers = Get-AzDoHeaders -Pat $Pat
+    $uri = "https://dev.azure.com/$Organization/$Project/_apis/build/builds?api-version=7.1&definitions=$DefinitionId&`$top=$Top&queryOrder=finishTimeDescending"
+
+    $builds = (Invoke-RestMethod -Uri $uri -Headers $headers).value
+
+    $total     = $builds.Count
+    $succeeded = ($builds | Where-Object result -eq "succeeded").Count
+    $failed    = ($builds | Where-Object result -eq "failed").Count
+    $canceled  = ($builds | Where-Object result -eq "canceled").Count
+    $partial   = ($builds | Where-Object result -eq "partiallySucceeded").Count
+
+    [PSCustomObject]@{
+        DefinitionId     = $DefinitionId
+        TotalBuilds      = $total
+        Succeeded        = $succeeded
+        Failed           = $failed
+        Canceled         = $canceled
+        PartiallySucceeded = $partial
+        SuccessRate      = if ($total -gt 0) { [math]::Round((($succeeded + $partial) / $total) * 100, 1) } else { 0 }
+        LastBuildNumber  = $builds[0].buildNumber
+        LastResult       = $builds[0].result
+        LastFinishTime   = $builds[0].finishTime
+    }
+}
