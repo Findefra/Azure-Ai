@@ -1,0 +1,38 @@
+function Start-AzDoBuild {
+    param(
+        [Parameter(Mandatory)][string]$Organization,
+        [Parameter(Mandatory)][string]$Project,
+        [Parameter(Mandatory)][int]$DefinitionId,
+        [string]$SourceBranch = "refs/heads/main",
+        [string]$SourceVersion,                          # Optional commit SHA
+        [hashtable]$Parameters = @{},                    # Template/queue parameters
+        [string]$Pat = $env:AZDO_PAT
+    )
+
+    $headers = Get-AzDoHeaders -Pat $Pat
+
+    $bodyObj = @{
+        definition     = @{ id = $DefinitionId }
+        sourceBranch   = $SourceBranch
+        reason         = "userCreated"
+    }
+
+    if ($SourceVersion) { $bodyObj.sourceVersion = $SourceVersion }
+    if ($Parameters.Count -gt 0) { $bodyObj.templateParameters = $Parameters }
+
+    $body = $bodyObj | ConvertTo-Json -Depth 5
+    $uri  = "https://dev.azure.com/$Organization/$Project/_apis/build/builds?api-version=7.1"
+
+    $build = Invoke-RestMethod -Uri $uri -Headers $headers -Method Post -Body $body
+
+    [PSCustomObject]@{
+        BuildId       = $build.id
+        BuildNumber   = $build.buildNumber
+        Status        = $build.status
+        Result        = $build.result
+        SourceBranch  = $build.sourceBranch
+        Definition    = $build.definition.name
+        Url           = $build._links.web.href
+        QueueTime     = $build.queueTime
+    }
+}
