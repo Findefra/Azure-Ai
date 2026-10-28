@@ -1,0 +1,31 @@
+function Get-AzDoAgentPoolHealth {
+    param(
+        [Parameter(Mandatory)][string]$Organization,
+        [Parameter(Mandatory)][int]$PoolId,
+        [string]$Pat = $env:AZDO_PAT
+    )
+
+    $headers = Get-AzDoHeaders -Pat $Pat
+    $uri = "https://dev.azure.com/$Organization/_apis/distributedtask/pools/$PoolId/agents?api-version=7.1&includeAssignedRequest=true"
+
+    $agents = (Invoke-RestMethod -Uri $uri -Headers $headers).value
+
+    $total     = $agents.Count
+    $online    = ($agents | Where-Object status -eq "online").Count
+    $offline   = ($agents | Where-Object status -eq "offline").Count
+    $disabled  = ($agents | Where-Object enabled -eq $false).Count
+    $busy      = ($agents | Where-Object { $_.assignedRequest -ne $null }).Count
+    $idle      = $online - $busy
+
+    [PSCustomObject]@{
+        PoolId          = $PoolId
+        TotalAgents     = $total
+        Online          = $online
+        Offline         = $offline
+        Disabled        = $disabled
+        CurrentlyBusy   = $busy
+        Idle            = $idle
+        OnlinePercent   = if ($total -gt 0) { [math]::Round(($online / $total) * 100, 1) } else { 0 }
+        Utilization     = if ($online -gt 0) { [math]::Round(($busy / $online) * 100, 1) } else { 0 }
+    }
+}
