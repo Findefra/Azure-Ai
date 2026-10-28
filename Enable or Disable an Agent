@@ -1,0 +1,25 @@
+function Set-AzDoAgentState {
+    param(
+        [Parameter(Mandatory)][string]$Organization,
+        [Parameter(Mandatory)][int]$PoolId,
+        [Parameter(Mandatory)][int]$AgentId,
+        [Parameter(Mandatory)][bool]$Enabled,
+        [string]$Pat = $env:AZDO_PAT
+    )
+
+    $headers = Get-AzDoHeaders -Pat $Pat
+
+    # First get the current agent object
+    $getUri = "https://dev.azure.com/$Organization/_apis/distributedtask/pools/$PoolId/agents/$AgentId`?api-version=7.1"
+    $agent  = Invoke-RestMethod -Uri $getUri -Headers $headers
+
+    $agent.enabled = $Enabled
+
+    $body = $agent | ConvertTo-Json -Depth 10
+    $updateUri = "https://dev.azure.com/$Organization/_apis/distributedtask/pools/$PoolId/agents/$AgentId`?api-version=7.1"
+
+    $result = Invoke-RestMethod -Uri $updateUri -Headers $headers -Method Put -Body $body
+
+    $state = if ($Enabled) { "Enabled" } else { "Disabled" }
+    Write-Host "Agent '$($result.name)' (ID: $AgentId) is now $state" -ForegroundColor $(if ($Enabled) {"Green"} else {"Yellow"})
+}
