@@ -1,0 +1,42 @@
+function Get-AzDoBuild {
+    param(
+        [Parameter(Mandatory)][string]$Organization,
+        [Parameter(Mandatory)][string]$Project,
+        [Parameter(Mandatory)][int]$BuildId,
+        [switch]$IncludeTimeline,
+        [string]$Pat = $env:AZDO_PAT
+    )
+
+    $headers = Get-AzDoHeaders -Pat $Pat
+
+    $buildUri = "https://dev.azure.com/$Organization/$Project/_apis/build/builds/$BuildId`?api-version=7.1"
+    $build = Invoke-RestMethod -Uri $buildUri -Headers $headers
+
+    $result = [PSCustomObject]@{
+        BuildId       = $build.id
+        BuildNumber   = $build.buildNumber
+        Status        = $build.status
+        Result        = $build.result
+        Definition    = $build.definition.name
+        SourceBranch  = $build.sourceBranch
+        SourceVersion = $build.sourceVersion
+        RequestedBy   = $build.requestedBy.displayName
+        QueueTime     = $build.queueTime
+        StartTime     = $build.startTime
+        FinishTime    = $build.finishTime
+        Url           = $build._links.web.href
+        Timeline      = $null
+    }
+
+    if ($IncludeTimeline) {
+        $timelineUri = "https://dev.azure.com/$Organization/$Project/_apis/build/builds/$BuildId/timeline?api-version=7.1"
+        $timeline = Invoke-RestMethod -Uri $timelineUri -Headers $headers
+
+        $result.Timeline = $timeline.records |
+            Where-Object { $_.type -in @("Stage","Phase","Job","Task") } |
+            Select-Object name, type, state, result, startTime, finishTime, errorCount, warningCount |
+            Sort-Object startTime
+    }
+
+    return $result
+}
