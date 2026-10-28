@@ -1,0 +1,34 @@
+function Remove-AzDoOldBuilds {
+    param(
+        [Parameter(Mandatory)][string]$Organization,
+        [Parameter(Mandatory)][string]$Project,
+        [Parameter(Mandatory)][int]$DefinitionId,
+        [int]$KeepLast = 20,                             # Keep the most recent N builds
+        [int]$OlderThanDays = 90,                        # Also delete anything older than this
+        [switch]$WhatIf,
+        [string]$Pat = $env:AZDO_PAT
+    )
+
+    $headers = Get-AzDoHeaders -Pat $Pat
+    $uri = "https://dev.azure.com/$Organization/$Project/_apis/build/builds?api-version=7.1&definitions=$DefinitionId&`$top=200&queryOrder=finishTimeDescending"
+
+    $builds = (Invoke-RestMethod -Uri $uri -Headers $headers).value
+    $cutoff = (Get-Date).AddDays(-$OlderThanDays)
+
+    $toDelete = $builds | Select-Object -Skip $KeepLast | Where-Object {
+        $_.finishTime -and ([datetime]$_.finishTime -lt $cutoff)
+    }
+
+    foreach ($build in $toDelete) {
+        if ($WhatIf) {
+            Write-Host "WhatIf: Would delete build $($build.id) ($($build.buildNumber)) - $($build.finishTime)" -ForegroundColor Yellow
+        }
+        else {
+            $deleteUri = "https://dev.azure.com/$Organization/$Project/_apis/build/builds/$($build.id)?api-version=7.1"
+            Invoke-RestMethod -Uri $deleteUri -Headers $headers -Method Delete | Out-Null
+            Write-Host "Deleted build $($build.id) ($($build.buildNumber))" -ForegroundColor Green
+        }
+    }
+
+    Write-Host "Processed $($toDelete.Count) builds." -ForegroundColor Cyan
+}
