@@ -1,0 +1,18 @@
+function Get-AzDoAgentPools {
+    param(
+        [Parameter(Mandatory)][string]$Organization,
+        [string]$Pat = $env:AZDO_PAT
+    )
+
+    $headers = Get-AzDoHeaders -Pat $Pat
+    $uri = "https://dev.azure.com/$Organization/_apis/distributedtask/pools?api-version=7.1"
+
+    $pools = Invoke-RestMethod -Uri $uri -Headers $headers
+
+    $pools.value | Select-Object `
+        id, name, size, isHosted, isLegacy,
+        @{N='AutoSize';E={$_.autoSize}},
+        @{N='CreatedBy';E={$_.createdBy.displayName}},
+        @{N='CreatedOn';E={$_.createdOn}} |
+    Sort-Object name | Format-Table -AutoSize
+}
