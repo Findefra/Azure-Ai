@@ -1,0 +1,22 @@
+function Set-AzDoBuildDefinitionState {
+    param(
+        [Parameter(Mandatory)][string]$Organization,
+        [Parameter(Mandatory)][string]$Project,
+        [Parameter(Mandatory)][int]$DefinitionId,
+        [Parameter(Mandatory)][ValidateSet("enabled","disabled","paused")][string]$QueueStatus,
+        [string]$Pat = $env:AZDO_PAT
+    )
+
+    $headers = Get-AzDoHeaders -Pat $Pat
+
+    $getUri = "https://dev.azure.com/$Organization/$Project/_apis/build/definitions/$DefinitionId`?api-version=7.1"
+    $def = Invoke-RestMethod -Uri $getUri -Headers $headers
+
+    $def.queueStatus = $QueueStatus
+
+    $body = $def | ConvertTo-Json -Depth 15
+    $updateUri = "https://dev.azure.com/$Organization/$Project/_apis/build/definitions/$DefinitionId`?api-version=7.1"
+
+    $updated = Invoke-RestMethod -Uri $updateUri -Headers $headers -Method Put -Body $body
+    Write-Host "Build definition '$($updated.name)' queue status set to '$QueueStatus'" -ForegroundColor Cyan
+}
