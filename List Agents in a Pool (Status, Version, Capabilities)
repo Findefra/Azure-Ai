@@ -1,0 +1,33 @@
+function Get-AzDoAgents {
+    param(
+        [Parameter(Mandatory)][string]$Organization,
+        [Parameter(Mandatory)][int]$PoolId,
+        [switch]$IncludeCapabilities,
+        [string]$Pat = $env:AZDO_PAT
+    )
+
+    $headers = Get-AzDoHeaders -Pat $Pat
+    $uri = "https://dev.azure.com/$Organization/_apis/distributedtask/pools/$PoolId/agents?api-version=7.1&includeCapabilities=$($IncludeCapabilities.IsPresent)&includeAssignedRequest=true"
+
+    $agents = Invoke-RestMethod -Uri $uri -Headers $headers
+
+    $results = foreach ($a in $agents.value) {
+        [PSCustomObject]@{
+            Id              = $a.id
+            Name            = $a.name
+            Status          = $a.status                  # online / offline
+            Enabled         = $a.enabled
+            Version         = $a.version
+            OS              = $a.osDescription
+            AssignedRequest = if ($a.assignedRequest) { $a.assignedRequest.jobId } else { $null }
+            LastCompleted   = $a.lastCompletedRequest?.finishTime
+            Capabilities    = if ($IncludeCapabilities) { ($a.systemCapabilities.Keys | Sort-Object) -join ", " } else { $null }
+            UserCapabilities= if ($IncludeCapabilities) { ($a.userCapabilities.Keys | Sort-Object) -join ", " } else { $null }
+        }
+    }
+
+    $results | Sort-Object Name | Format-Table -AutoSize
+}
+
+# Example
+# Get-AzDoAgents -Organization $Organization -PoolId 9 -IncludeCapabilities
