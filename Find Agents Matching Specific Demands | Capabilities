@@ -1,0 +1,56 @@
+function Find-AzDoAgentsByCapability {
+    param(
+        [Parameter(Mandatory)][string]$Organization,
+        [Parameter(Mandatory)][int]$PoolId,
+        [Parameter(Mandatory)][hashtable]$RequiredCapabilities,  # e.g. @{ "Agent.OS" = "Windows_NT"; "Java" = "true" }
+        [string]$Pat = $env:AZDO_PAT
+    )
+
+    $headers = Get-AzDoHeaders -Pat $Pat
+    $uri = "https://dev.azure.com/$Organization/_apis/distributedtask/pools/$PoolId/agents?api-version=7.1&includeCapabilities=true"
+
+    $agents = (Invoke-RestMethod -Uri $uri -Headers $headers).value
+
+    $matches = foreach ($agent in $agents) {
+        $allMatch = $true
+        foreach ($key in $RequiredCapabilities.Keys) {
+            $requiredValue = $RequiredCapabilities[$key]
+            $actual = $null
+
+            if ($agent.systemCapabilities.ContainsKey($key)) {
+                $actual = $agent.systemCapabilities[$key]
+            }
+            elseif ($agent.userCapabilities.ContainsKey($key)) {
+                $actual = $agent.userCapabilities[$key]
+            }
+
+            if ($actual -ne $requiredValue) {
+                $allMatch = $false
+                break
+            }
+        }
+
+        if ($allMatch) {
+            [PSCustomObject]@{
+                Id       = $agent.id
+                Name     = $agent.name
+                Status   = $agent.status
+                Enabled  = $agent.enabled
+                Version  = $agent.version
+                OS       = $agent.osDescription
+            }
+        }
+    }
+
+    if ($matches) {
+        $matches | Format-Table -AutoSize
+    } else {
+        Write-Host "No agents matched the required capabilities." -ForegroundColor Yellow
+    }
+}
+
+# Example
+# Find-AzDoAgentsByCapability -Organization $Organization -PoolId 9 -RequiredCapabilities @{
+#     "Agent.OS" = "Linux"
+#     "docker"   = "true"
+# }
