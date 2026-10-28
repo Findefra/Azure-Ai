@@ -1,0 +1,26 @@
+function Update-AzDoAgentCapabilities {
+    param(
+        [Parameter(Mandatory)][string]$Organization,
+        [Parameter(Mandatory)][int]$PoolId,
+        [Parameter(Mandatory)][int]$AgentId,
+        [Parameter(Mandatory)][hashtable]$UserCapabilities,   # e.g. @{ "Environment" = "Prod"; "DiskSpaceGB" = "500" }
+        [string]$Pat = $env:AZDO_PAT
+    )
+
+    $headers = Get-AzDoHeaders -Pat $Pat
+
+    $getUri = "https://dev.azure.com/$Organization/_apis/distributedtask/pools/$PoolId/agents/$AgentId`?api-version=7.1&includeCapabilities=true"
+    $agent  = Invoke-RestMethod -Uri $getUri -Headers $headers
+
+    # Merge new capabilities
+    foreach ($key in $UserCapabilities.Keys) {
+        $agent.userCapabilities[$key] = $UserCapabilities[$key]
+    }
+
+    $body = $agent | ConvertTo-Json -Depth 10
+    $updateUri = "https://dev.azure.com/$Organization/_apis/distributedtask/pools/$PoolId/agents/$AgentId`?api-version=7.1"
+
+    $result = Invoke-RestMethod -Uri $updateUri -Headers $headers -Method Put -Body $body
+    Write-Host "Updated user capabilities on agent '$($result.name)'" -ForegroundColor Green
+    $result.userCapabilities
+}
